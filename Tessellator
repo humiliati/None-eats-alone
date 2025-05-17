@@ -1,0 +1,118 @@
+// offering_engine.rs
+// protocol for ethical sabotage and relational recursion
+
+use std::collections::HashMap;
+
+#[derive(Debug, Clone)]
+struct Artifact {
+    id: String,
+    quality: f64,
+    vector: Vec<f64>,
+    themes: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+struct Creator {
+    id: String,
+    expectation_profile: Vec<f64>,
+    artifact_history: Vec<Artifact>,
+    feedback_loop_enabled: bool,
+}
+
+#[derive(Debug, Clone)]
+struct Receiver {
+    id: String,
+    value_vector: Vec<f64>,
+    sentiment_profile: Vec<String>,
+    reputation_score: f64,
+    interaction_history: Vec<String>, // creator ids
+}
+
+fn cosine_distance(a: &Vec<f64>, b: &Vec<f64>) -> f64 {
+    let dot: f64 = a.iter().zip(b).map(|(x, y)| x * y).sum();
+    let mag_a: f64 = a.iter().map(|x| x.powi(2)).sum::<f64>().sqrt();
+    let mag_b: f64 = b.iter().map(|x| x.powi(2)).sum::<f64>().sqrt();
+    1.0 - (dot / (mag_a * mag_b + 1e-9))
+}
+
+fn evaluate_resonance(artifact: &Artifact, receiver: &Receiver) -> f64 {
+    let content_similarity = 1.0 - cosine_distance(&artifact.vector, &receiver.value_vector);
+    let sentiment_alignment = receiver
+        .sentiment_profile
+        .iter()
+        .filter(|tag| artifact.themes.contains(tag))
+        .count() as f64
+        / (receiver.sentiment_profile.len().max(1) as f64);
+    0.7 * content_similarity + 0.3 * sentiment_alignment
+}
+
+fn social_bond(creator: &Creator, receiver: &Receiver) -> f64 {
+    let history_weight = receiver
+        .interaction_history
+        .iter()
+        .filter(|&id| id == &creator.id)
+        .count() as f64;
+    let overlap = history_weight.min(5.0) / 5.0;
+    overlap
+}
+
+fn shared_meaning(artifact: &Artifact, creator: &Creator, receiver: &Receiver) -> f64 {
+    let creator_values: Vec<String> = creator
+        .artifact_history
+        .iter()
+        .flat_map(|a| a.themes.clone())
+        .collect();
+    let joint_field: Vec<String> = artifact
+        .themes
+        .iter()
+        .filter(|theme| creator_values.contains(theme) || receiver.sentiment_profile.contains(theme))
+        .cloned()
+        .collect();
+    (joint_field.len() as f64).min(10.0)
+}
+
+fn transference_value(artifact: &Artifact, creator: &Creator, receiver: &Receiver) -> f64 {
+    social_bond(creator, receiver) * shared_meaning(artifact, creator, receiver)
+}
+
+fn query_best_receivers<'a>(
+    artifact: &Artifact,
+    creator: &Creator,
+    pool: &'a Vec<Receiver>,
+) -> Vec<&'a Receiver> {
+    let mut ranked: Vec<(&Receiver, f64)> = pool
+        .iter()
+        .filter(|r| r.reputation_score > 0.5)
+        .map(|r| {
+            let resonance = evaluate_resonance(artifact, r);
+            let value = transference_value(artifact, creator, r);
+            (r, resonance + value)
+        })
+        .collect();
+
+    ranked.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+    ranked.iter().map(|(r, _)| *r).collect()
+}
+
+fn feedback_loop(creator: &mut Creator, artifact: &mut Artifact, feedback: &str) {
+    artifact.themes.push(feedback.to_string());
+    creator.expectation_profile.iter_mut().for_each(|x| *x *= 0.99); // gently adapt ideal
+    println!("[LOG] Artifact evolved via resonance.");
+}
+
+fn offer_artifact(
+    creator: &mut Creator,
+    artifact: &mut Artifact,
+    receivers: &mut Vec<Receiver>,
+) {
+    let matches = query_best_receivers(artifact, creator, receivers);
+    for r in matches {
+        println!(
+            "Offering '{}' to receiver '{}'.",
+            artifact.id, r.id
+        );
+        if creator.feedback_loop_enabled {
+            feedback_loop(creator, artifact, "affirmation");
+        }
+    }
+}
